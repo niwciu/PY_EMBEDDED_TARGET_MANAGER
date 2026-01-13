@@ -1,17 +1,23 @@
 import argparse
 import os
+import sys
 from typing import List, Optional
+
+if __name__ == "__main__" and __package__ is None:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "embedded_target_manager"
 
 import yaml
 
-from .config import create_required_directories, load_config, normalize_modules_config, validate_config
+from .config import create_required_directories, load_config, validate_config
+from .discovery import discover_modules, resolve_module_paths
 from .exceptions import TargetExecutionError
 from .reporting import (
     generate_main_report,
     generate_missing_report_page,
     open_html_files_in_default_browser,
 )
-from .runner import run_make_targets
+from .runner import discover_targets, run_make_targets
 from .ui import ANSI_RED, bold, colorize, supports_ansi, TableProgress
 
 
@@ -90,7 +96,6 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     try:
         validate_config(config)
-        config = normalize_modules_config(config, verbose=args.verbose)
     except ValueError as exc:
         exit_with_error(f"Configuration error in '{args.config}':\n{exc}", exit_code=2)
 
@@ -103,9 +108,38 @@ def main(argv: Optional[List[str]] = None) -> None:
         if args.verbose:
             print(f"Auto-selected make jobs: -j{build_jobs}")
 
-    create_required_directories(config, verbose=args.verbose)
+    resolved_paths = resolve_module_paths(config["module_paths"], args.config)
+    try:
+        modules = discover_modules(resolved_paths, verbose=args.verbose)
+    except ValueError as exc:
+        exit_with_error(f"Configuration error in '{args.config}':\n{exc}", exit_code=2)
 
-    test_folder = "../"
+    common_targets = [target.strip() for target in config.get("common_targets", [])]
+    additional_targets = config.get("additional_targets") or {}
+    excluded_targets = config.get("excluded_targets") or {}
+
+    for module in modules:
+        module_targets = discover_targets(
+            module["path"],
+            build_system,
+            reconfigure=args.reconfigure,
+            verbose=args.verbose,
+        )
+        available_set = set(module_targets)
+        excluded = set(excluded_targets.get(module["name"], []) or [])
+        additional = list(additional_targets.get(module["name"], []) or [])
+
+        expected = [target for target in common_targets if target not in excluded]
+        for target in additional:
+            if target not in expected:
+                expected.append(target)
+
+        module["targets"] = expected
+        module["available_targets"] = [target for target in expected if target in available_set]
+
+    config["modules"] = modules
+
+    create_required_directories(config, verbose=args.verbose)
 
     reports_to_open = []
     reports_to_show = config.get("reports_to_show", [])
@@ -149,6 +183,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         for module in modules_to_run:
             original = module.get("targets", [])
             module["targets"] = [target for target in original if target in requested_set]
+            available = module.get("available_targets", [])
+            module["available_targets"] = [target for target in available if target in requested_set]
 
     progress = None
     if not args.verbose and supports_ansi():
@@ -170,35 +206,31 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
 
         for module in modules_to_run:
-            progress.mark_target_set_for_module(module["name"], module.get("targets", []))
+            progress.mark_target_set_for_module(module["name"], module.get("available_targets", []))
 
         progress.draw()
 
     try:
         for module in modules_to_run:
-            module_path = os.path.join(test_folder, module["name"])
-            if os.path.isdir(module_path):
-                if args.verbose:
-                    print(f"Module: {module_path}")
+            module_path = module["path"]
+            if args.verbose:
+                print(f"Module: {module_path}")
 
-                if not module.get("targets"):
-                    continue
+            if not module.get("available_targets"):
+                continue
 
-                failed_targets = run_make_targets(
-                    module_path,
-                    module["targets"],
-                    build_system,
-                    build_jobs,
-                    reconfigure=args.reconfigure,
-                    keep_going=args.keep_going,
-                    verbose=args.verbose,
-                    module_display_name=module["name"],
-                    progress_cb=(progress.update if progress else None),
-                )
-                all_failed_targets.extend(failed_targets)
-            else:
-                if args.verbose:
-                    print(f"Module directory not found: {module_path}")
+            failed_targets = run_make_targets(
+                module_path,
+                module["available_targets"],
+                build_system,
+                build_jobs,
+                reconfigure=args.reconfigure,
+                keep_going=args.keep_going,
+                verbose=args.verbose,
+                module_display_name=module["name"],
+                progress_cb=(progress.update if progress else None),
+            )
+            all_failed_targets.extend(failed_targets)
 
     except TargetExecutionError as exc:
         msg = (
