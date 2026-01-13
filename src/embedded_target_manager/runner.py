@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 from typing import Callable, List, Optional
@@ -9,17 +10,12 @@ from .exceptions import TargetExecutionError
 ProgressCallback = Callable[[str, str, str], None]
 
 
-def run_make_targets(
+def configure_module(
     module_path: str,
-    targets: List[str],
     build_system: str,
-    build_jobs: Optional[int],
     reconfigure: bool = False,
-    keep_going: bool = False,
     verbose: bool = False,
-    module_display_name: Optional[str] = None,
-    progress_cb: Optional[ProgressCallback] = None,
-):
+) -> str:
     out_path = os.path.join(module_path, "out")
 
     if reconfigure and os.path.isdir(out_path):
@@ -50,6 +46,85 @@ def run_make_targets(
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.STDOUT,
             )
+
+    return out_path
+
+
+def _extract_target_name(line: str) -> Optional[str]:
+    stripped = line.strip()
+    if not stripped:
+        return None
+
+    lowered = stripped.lower()
+    if lowered.startswith(("the following", "built with", "targets:", "all primary")):
+        return None
+
+    for prefix in ("*", "-", "+"):
+        if stripped.startswith(prefix):
+            stripped = stripped[1:].lstrip()
+
+    for sep in (":", " ("):
+        if sep in stripped:
+            stripped = stripped.split(sep, 1)[0].strip()
+
+    token = stripped.split()[0] if stripped else ""
+    if not token:
+        return None
+
+    if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_.+/\\-]*$", token):
+        return None
+
+    return token
+
+
+def discover_targets(
+    module_path: str,
+    build_system: str,
+    reconfigure: bool = False,
+    verbose: bool = False,
+) -> List[str]:
+    out_path = configure_module(
+        module_path,
+        build_system,
+        reconfigure=reconfigure,
+        verbose=verbose,
+    )
+
+    command = ["cmake", "--build", out_path, "--target", "help"]
+    result = subprocess.run(command, cwd=module_path, capture_output=True, text=True, check=False)
+    output = (result.stdout or "") + (result.stderr or "")
+
+    if result.returncode != 0:
+        raise ValueError(f"Failed to discover targets for {module_path}.\n{output}")
+
+    targets = []
+    seen = set()
+    for line in output.splitlines():
+        target = _extract_target_name(line)
+        if target and target not in seen:
+            seen.add(target)
+            targets.append(target)
+
+    return targets
+
+
+def run_make_targets(
+    module_path: str,
+    targets: List[str],
+    build_system: str,
+    build_jobs: Optional[int],
+    reconfigure: bool = False,
+    keep_going: bool = False,
+    verbose: bool = False,
+    module_display_name: Optional[str] = None,
+    progress_cb: Optional[ProgressCallback] = None,
+):
+    out_path = configure_module(
+        module_path,
+        build_system,
+        reconfigure=reconfigure,
+        verbose=verbose,
+    )
 
     failed_targets = []
     display_name = module_display_name if module_display_name else module_path
