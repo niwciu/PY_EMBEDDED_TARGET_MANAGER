@@ -1,6 +1,11 @@
 import argparse
 import os
+import sys
 from typing import List, Optional
+
+if __name__ == "__main__" and __package__ is None:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "embedded_target_manager"
 
 import yaml
 
