@@ -31,4 +31,33 @@ python -m embedded_target_manager --config config.yaml
 
 ## Configuration format
 
-The CLI accepts legacy and normalized module schemas. Ensure the YAML includes a `build` section defining the `system` (`make` or `ninja`) and the `modules` list.
+The YAML configuration must include a `build` section defining the `system` (`make` or `ninja`) and a `module_paths` list pointing to directories that contain module subfolders (each module folder must include a `CMakeLists.txt`).
+
+Example with multiple module paths, common targets, exclusions, and additions:
+
+```yaml
+build:
+  system: ninja
+  jobs: 8
+
+module_paths:
+  - ../firmware/modules
+  - ../platform/modules
+
+common_targets:
+  - all
+  - unit_tests
+  - ccmr
+
+excluded_targets:
+  bootloader:
+    - unit_tests
+  sensor_driver:
+    - ccmr
+
+additional_targets:
+  bootloader:
+    - flash
+  app_core:
+    - coverage
+```
