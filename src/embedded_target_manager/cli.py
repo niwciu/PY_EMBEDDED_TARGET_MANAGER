@@ -109,8 +109,13 @@ def main(argv: Optional[List[str]] = None) -> None:
             print(f"Auto-selected make jobs: -j{build_jobs}")
 
     resolved_paths = resolve_module_paths(config["module_paths"], args.config)
+    excluded_modules = config.get("exclude_modules") or []
     try:
-        modules = discover_modules(resolved_paths, verbose=args.verbose)
+        modules = discover_modules(
+            resolved_paths,
+            verbose=args.verbose,
+            exclude_modules=excluded_modules,
+        )
     except ValueError as exc:
         exit_with_error(f"Configuration error in '{args.config}':\n{exc}", exit_code=2)
 
@@ -242,8 +247,15 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
         exit_with_error(msg, exit_code=(exc.returncode if isinstance(exc.returncode, int) else 1))
 
-    generate_missing_report_page(os.path.join("..", "..", "reports", "CCM"), "embedded-target-manager", verbose=args.verbose)
-    generate_main_report(os.path.join("..", "..", "reports", "CCM"), args.config, "embedded-target-manager", verbose=args.verbose)
+    script_name = os.path.basename(__file__)
+    generate_missing_report_page(os.path.join("..", "..", "reports", "CCM"), script_name, verbose=args.verbose)
+    generate_main_report(
+        os.path.join("..", "..", "reports", "CCM"),
+        args.config,
+        script_name,
+        verbose=args.verbose,
+        modules=config["modules"],
+    )
 
     if (not args.modules) and reports_to_open:
         open_html_files_in_default_browser(reports_to_open)

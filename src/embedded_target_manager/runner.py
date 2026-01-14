@@ -59,6 +59,9 @@ def _extract_target_name(line: str) -> Optional[str]:
     if lowered.startswith(("the following", "built with", "targets:", "all primary")):
         return None
 
+    if stripped.startswith("..."):
+        stripped = stripped.lstrip(". ").lstrip()
+
     for prefix in ("*", "-", "+"):
         if stripped.startswith(prefix):
             stripped = stripped[1:].lstrip()

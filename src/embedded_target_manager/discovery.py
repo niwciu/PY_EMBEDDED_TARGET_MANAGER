@@ -16,9 +16,14 @@ def resolve_module_paths(module_paths: Iterable[str], config_path: str) -> List[
     return resolved
 
 
-def discover_modules(module_paths: Iterable[str], verbose: bool = False) -> List[Dict[str, str]]:
+def discover_modules(
+    module_paths: Iterable[str],
+    verbose: bool = False,
+    exclude_modules: Iterable[str] | None = None,
+) -> List[Dict[str, str]]:
     modules: List[Dict[str, str]] = []
     seen_names = set()
+    excluded = {name.strip() for name in (exclude_modules or []) if name.strip()}
 
     for base_path in module_paths:
         if not os.path.isdir(base_path):
@@ -32,6 +37,9 @@ def discover_modules(module_paths: Iterable[str], verbose: bool = False) -> List
 
             cmake_file = os.path.join(module_dir, "CMakeLists.txt")
             if not os.path.isfile(cmake_file):
+                continue
+
+            if entry in excluded:
                 continue
 
             if entry in seen_names:

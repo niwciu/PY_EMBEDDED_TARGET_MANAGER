@@ -37,6 +37,13 @@ def validate_config(config: Dict[str, Any]) -> None:
         if not isinstance(module_path, str) or not module_path.strip():
             raise ValueError("All entries in 'module_paths' must be non-empty strings.")
 
+    if "exclude_modules" in config and config["exclude_modules"] is not None:
+        if not isinstance(config["exclude_modules"], list):
+            raise ValueError("'exclude_modules' must be a list of module names.")
+        for module_name in config["exclude_modules"]:
+            if not isinstance(module_name, str) or not module_name.strip():
+                raise ValueError("All entries in 'exclude_modules' must be non-empty strings.")
+
     if "common_targets" not in config or not isinstance(config["common_targets"], list):
         raise ValueError("Missing 'common_targets' or it is not a list.")
 

@@ -8,6 +8,14 @@ Embedded Target Manager is a CLI utility for running build targets across multip
 pip install embedded-target-manager
 ```
 
+## Local development install
+
+```bash
+git clone <repo-url>
+cd PY_EMBEDDED_TARGET_MANAGER
+pip install .
+```
+
 ## Usage
 
 ```bash
@@ -43,6 +51,10 @@ build:
 module_paths:
   - ../firmware/modules
   - ../platform/modules
+
+exclude_modules:
+  - legacy_boot
+  - deprecated_module
 
 common_targets:
   - all
