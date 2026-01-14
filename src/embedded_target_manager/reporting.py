@@ -55,11 +55,17 @@ def generate_missing_report_page(report_folder: str, script_name: str, verbose: 
             print(f"Missing report page already exists: {missing_report_path}")
 
 
-def generate_main_report(report_folder: str, modules_yaml_file: str, script_name: str, verbose: bool = False) -> None:
-    with open(modules_yaml_file, "r") as yaml_file:
-        config_data = yaml.safe_load(yaml_file)
-
-    modules = config_data["modules"]
+def generate_main_report(
+    report_folder: str,
+    modules_yaml_file: str,
+    script_name: str,
+    verbose: bool = False,
+    modules: list | None = None,
+) -> None:
+    if modules is None:
+        with open(modules_yaml_file, "r") as yaml_file:
+            config_data = yaml.safe_load(yaml_file)
+        modules = config_data["modules"]
     main_report_path = os.path.join(report_folder, "index.html")
 
     with open(main_report_path, "w", encoding="utf-8") as file:
